@@ -898,7 +898,7 @@ static int trust_chain_check(struct kr_request *request, struct kr_query *qry)
 static int zone_cut_check(struct kr_request *request, struct kr_query *qry, knot_pkt_t *packet)
 {
 	/* Stub mode, just forward and do not solve cut. */
-	if (qry->flags & QUERY_STUB) {
+	if (qry->flags & (QUERY_STUB | QUERY_FORWARD)) {
 		return KR_STATE_PRODUCE;
 	}
 
@@ -1030,7 +1030,7 @@ int kr_resolve_produce(struct kr_request *request, struct sockaddr **dst, int *t
 	}
 
 	/* Update zone cut, spawn new subrequests. */
-	if (!(qry->flags & QUERY_STUB)) {
+	if (!(qry->flags & (QUERY_STUB | QUERY_FORWARD))) {
 		int state = zone_cut_check(request, qry, packet);
 		switch(state) {
 		case KR_STATE_FAIL: return KR_STATE_FAIL;
