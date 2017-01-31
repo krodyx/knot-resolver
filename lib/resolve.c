@@ -886,7 +886,7 @@ static int trust_chain_check(struct kr_request *request, struct kr_query *qry)
 static int zone_cut_check(struct kr_request *request, struct kr_query *qry, knot_pkt_t *packet)
 {
 	/* Stub mode, just forward and do not solve cut. */
-	if (qry->flags & QUERY_STUB) {
+	if (qry->flags & (QUERY_STUB | QUERY_FORWARD)) {
 		return KR_STATE_PRODUCE;
 	}
 
@@ -1010,7 +1010,7 @@ int kr_resolve_produce(struct kr_request *request, struct sockaddr **dst, int *t
 	}
 
 	/* Update zone cut, spawn new subrequests. */
-	if (!(qry->flags & QUERY_STUB)) {
+	if (!(qry->flags & (QUERY_STUB | QUERY_FORWARD))) {
 		int state = zone_cut_check(request, qry, packet);
 		switch(state) {
 		case KR_STATE_FAIL: return KR_STATE_FAIL;
@@ -1030,7 +1030,7 @@ ns_election:
 		return KR_STATE_FAIL;
 	}
 
-	const bool retry = (qry->flags & (QUERY_TCP|QUERY_STUB|QUERY_BADCOOKIE_AGAIN));
+	const bool retry = (qry->flags & (QUERY_TCP|QUERY_STUB|QUERY_FORWARD|QUERY_BADCOOKIE_AGAIN));
 	if (qry->flags & (QUERY_AWAIT_IPV4|QUERY_AWAIT_IPV6)) {
 		kr_nsrep_elect_addr(qry, request->ctx);
 	} else if (!qry->ns.name || !retry) { /* Keep NS when requerying/stub/badcookie. */

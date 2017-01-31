@@ -592,7 +592,15 @@ static int process_answer(knot_pkt_t *pkt, struct kr_request *req)
 		if (!next) {
 			return KR_STATE_FAIL;
 		}
-		next->flags |= QUERY_AWAIT_CUT;
+		if (query->flags & QUERY_FORWARD) {
+			next->flags |= QUERY_FORWARD;
+			state = kr_nsrep_copy_set(&next->ns, &query->ns);
+			if (state != kr_ok()) {
+				return KR_STATE_FAIL;
+			}
+		} else {
+			next->flags |= QUERY_AWAIT_CUT;
+		}
 		if (query->flags & QUERY_DNSSEC_INSECURE) {
 			next->flags &= ~QUERY_DNSSEC_WANT;
 			next->flags |= QUERY_DNSSEC_INSECURE;

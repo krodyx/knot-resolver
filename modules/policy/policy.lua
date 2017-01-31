@@ -85,6 +85,28 @@ local function forward(target)
 	end
 end
 
+-- Forward request and all subrequests to upstream; validate answers
+local function full_forward(target)
+	local list = {}
+	if type(target) == 'table' then
+		for _, v in pairs(target) do
+			table.insert(list, {parse_target(v)})
+			assert(#list <= 4, 'at most 4 FORWARD targets are supported')
+		end
+	else
+		table.insert(list, {parse_target(target)})
+	end
+	return function(state, req)
+		req = kres.request_t(req)
+		local qry = req:current()
+		req.options = bit.bor(bit.bor(req.options, kres.query.FORWARD), kres.query.NO_MINIMIZE)
+		qry.flags = bit.band(bit.bor(qry.flags, kres.query.FORWARD), bit.bnot(kres.query.ALWAYS_CUT))
+		qry.flags = bit.bor(qry.flags, kres.query.NO_MINIMIZE)
+		qry:nslist(list)
+		return state
+	end
+end
+
 -- Rewrite records in packet
 local function reroute(tbl, names)
 	-- Import renumbering rules
@@ -110,7 +132,7 @@ end
 local policy = {
 	-- Policies
 	PASS = 1, DENY = 2, DROP = 3, TC = 4, QTRACE = 5,
-	FORWARD = forward, REROUTE = reroute, MIRROR = mirror, FLAGS = flags,
+	FULL_FORWARD = full_forward, FORWARD = forward, REROUTE = reroute, MIRROR = mirror, FLAGS = flags,
 	-- Special values
 	ANY = 0,
 }
