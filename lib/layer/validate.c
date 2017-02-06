@@ -445,6 +445,13 @@ static int rrsig_not_found(kr_layer_t *ctx, const knot_rrset_t *rr)
 	} else {
 		next->flags |= QUERY_AWAIT_CUT;
 	}
+	if (qry->flags & QUERY_FORWARD) {
+		int state = kr_nsrep_copy_set(&next->ns, &qry->ns);
+		if (state != kr_ok()) {
+			return KR_STATE_FAIL;
+		}
+		next->flags &= ~QUERY_AWAIT_CUT;
+	}
 	next->flags |= QUERY_DNSSEC_WANT;
 	return KR_STATE_YIELD;
 }

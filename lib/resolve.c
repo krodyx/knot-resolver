@@ -558,7 +558,7 @@ static int query_finalize(struct kr_request *request, struct kr_query *qry, knot
 		}
 		if (ret == 0) {
 			/* Stub resolution (ask for +rd and +do) */
-			if (qry->flags & QUERY_STUB) {
+			if (qry->flags & (QUERY_STUB | QUERY_FORWARD)) {
 				knot_wire_set_rd(pkt->wire);
 				if (knot_pkt_has_dnssec(request->answer))
 					knot_edns_set_do(pkt->opt_rr);
@@ -817,6 +817,12 @@ static struct kr_query *zone_cut_subreq(struct kr_rplan *rplan, struct kr_query 
 	    kr_zonecut_copy_trust(&next->zone_cut, &parent->zone_cut) != 0) {
 		return NULL;
 	}
+	if (parent->flags & QUERY_FORWARD) {
+		int state = kr_nsrep_copy_set(&next->ns, &parent->ns);
+		if (state != kr_ok()) {
+			return NULL;
+		}
+	}
 	next->flags |= QUERY_NO_MINIMIZE;
 	if (parent->flags & QUERY_DNSSEC_WANT) {
 		next->flags |= QUERY_DNSSEC_WANT;
@@ -864,6 +870,12 @@ static int trust_chain_check(struct kr_request *request, struct kr_query *qry)
 		if (!next) {
 			return KR_STATE_FAIL;
 		}
+		if (qry->flags & QUERY_FORWARD) {
+			int state = kr_nsrep_copy_set(&next->ns, &qry->ns);
+			if (state != kr_ok()) {
+				return KR_STATE_FAIL;
+			}
+		}
 		next->flags |= QUERY_AWAIT_CUT|QUERY_DNSSEC_WANT;
 		return KR_STATE_DONE;
 	}
@@ -886,13 +898,21 @@ static int trust_chain_check(struct kr_request *request, struct kr_query *qry)
 static int zone_cut_check(struct kr_request *request, struct kr_query *qry, knot_pkt_t *packet)
 {
 	/* Stub mode, just forward and do not solve cut. */
-	if (qry->flags & (QUERY_STUB | QUERY_FORWARD)) {
+	if (qry->flags & QUERY_STUB) {
 		return KR_STATE_PRODUCE;
 	}
 
+	/* Forwarding to upstream resolver mode.
+	 * Since forwarding targets already are in qry->ns -
+	 * cut fetching is not needed.
+	 * Spawn DS \ DNSKEY requests if needed and exit. */
+	if (qry->flags & QUERY_FORWARD) {
+		return trust_chain_check(request, qry);
+	}
+
+	/* The query was resolved from cache.
+	 * Spawn DS \ DNSKEY requests if needed and exit. */
 	if (!(qry->flags & QUERY_AWAIT_CUT)) {
-		/* The query was resolved from cache.
-		 * Spawn DS \ DNSKEY requests if needed and exit */
 		return trust_chain_check(request, qry);
 	}
 
@@ -1010,7 +1030,7 @@ int kr_resolve_produce(struct kr_request *request, struct sockaddr **dst, int *t
 	}
 
 	/* Update zone cut, spawn new subrequests. */
-	if (!(qry->flags & (QUERY_STUB | QUERY_FORWARD))) {
+	if (!(qry->flags & QUERY_STUB)) {
 		int state = zone_cut_check(request, qry, packet);
 		switch(state) {
 		case KR_STATE_FAIL: return KR_STATE_FAIL;
@@ -1035,7 +1055,8 @@ ns_election:
 		kr_nsrep_elect_addr(qry, request->ctx);
 	} else if (!qry->ns.name || !retry) { /* Keep NS when requerying/stub/badcookie. */
 		/* Root DNSKEY must be fetched from the hints to avoid chicken and egg problem. */
-		if (qry->sname[0] == '\0' && qry->stype == KNOT_RRTYPE_DNSKEY) {
+		if (qry->sname[0] == '\0' && qry->stype == KNOT_RRTYPE_DNSKEY
+		    && !(qry->stype | QUERY_FORWARD)) {
 			kr_zonecut_set_sbelt(request->ctx, &qry->zone_cut);
 			qry->flags |= QUERY_NO_THROTTLE; /* Pick even bad SBELT servers */
 		}
