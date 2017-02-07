@@ -305,6 +305,16 @@ static int process_authority(knot_pkt_t *pkt, struct kr_request *req)
 	int result = KR_STATE_CONSUME;
 	const knot_pktsection_t *ns = knot_pkt_section(pkt, KNOT_AUTHORITY);
 
+	if (qry->flags & QUERY_FORWARD) {
+		for (unsigned i = 0; i < ns->count; ++i) {
+			const knot_rrset_t *rr = knot_pkt_rr(ns, i);
+			if (rr->type == KNOT_RRTYPE_SOA) {
+				qry->zone_cut.name = knot_dname_copy(rr->owner, &req->pool);
+			}
+		}
+		return KR_STATE_CONSUME;
+	}
+
 #ifdef STRICT_MODE
 	/* AA, terminate resolution chain. */
 	if (knot_wire_get_aa(pkt->wire)) {
