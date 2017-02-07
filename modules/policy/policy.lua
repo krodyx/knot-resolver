@@ -90,11 +90,11 @@ local function full_forward(target)
 	local list = {}
 	if type(target) == 'table' then
 		for _, v in pairs(target) do
-			table.insert(list, {parse_target(v)})
+			table.insert(list, addr2sock(v))
 			assert(#list <= 4, 'at most 4 FORWARD targets are supported')
 		end
 	else
-		table.insert(list, {parse_target(target)})
+		table.insert(list, addr2sock(target))
 	end
 	return function(state, req)
 		req = kres.request_t(req)
