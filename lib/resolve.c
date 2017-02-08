@@ -558,12 +558,15 @@ static int query_finalize(struct kr_request *request, struct kr_query *qry, knot
 		}
 		if (ret == 0) {
 			/* Stub resolution (ask for +rd and +do) */
-			if (qry->flags & (QUERY_STUB | QUERY_FORWARD)) {
+			if (qry->flags & QUERY_STUB) {
 				knot_wire_set_rd(pkt->wire);
 				if (knot_pkt_has_dnssec(request->answer))
 					knot_edns_set_do(pkt->opt_rr);
 			/* Full resolution (ask for +cd and +do) */
 			} else if (qry->flags & QUERY_DNSSEC_WANT) {
+				if (qry->flags & QUERY_FORWARD) {
+					knot_wire_set_rd(pkt->wire);
+				}
 				knot_edns_set_do(pkt->opt_rr);
 				knot_wire_set_cd(pkt->wire);
 			}

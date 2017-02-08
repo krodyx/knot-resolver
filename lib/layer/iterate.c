@@ -392,16 +392,16 @@ static int unroll_cname(knot_pkt_t *pkt, struct kr_request *req, bool referral, 
 	uint8_t rank = !(query->flags & QUERY_DNSSEC_WANT) || (query->flags & QUERY_CACHED) ?
 			KR_VLDRANK_SECURE : KR_VLDRANK_INITIAL;
 	bool is_final = (query->parent == NULL);
-	uint32_t iter_count = 0;
 	bool strict_mode = (query->flags & QUERY_STRICT);
+	uint32_t iter_count = 0;
 	do {
 		/* CNAME was found at previous iteration, but records may not follow the correct order.
 		 * Try to find records for pending_cname owner from section start. */
 		cname = pending_cname;
 		pending_cname = NULL;
+		/* If not secure, always follow cname chain. */
 		for (unsigned i = 0; i < an->count; ++i) {
 			const knot_rrset_t *rr = knot_pkt_rr(an, i);
-
 			/* Skip the RR if its owner+type doesn't interest us. */
 			const bool type_OK = rr->type == query->stype
 				|| rr->type == KNOT_RRTYPE_CNAME
@@ -844,7 +844,10 @@ static int resolve(kr_layer_t *ctx, knot_pkt_t *pkt)
 		break; /* OK */
 	case KNOT_RCODE_REFUSED:
 	case KNOT_RCODE_SERVFAIL: {
-		if (query->flags & QUERY_STUB) { break; } /* Pass through in stub mode */
+		if (query->flags & (QUERY_STUB | QUERY_FORWARD)) {
+			/* Pass through in stub or forwarding mode */
+			break;
+		}
 		VERBOSE_MSG("<= rcode: %s\n", rcode ? rcode->name : "??");
 		query->fails += 1;
 		if (query->fails >= KR_QUERY_NSRETRY_LIMIT) {
