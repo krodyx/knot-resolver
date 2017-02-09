@@ -543,6 +543,22 @@ static int check_signer(kr_layer_t *ctx, knot_pkt_t *pkt)
 				 * for both parent and child,
 				 * and child zone is not signed. */
 				qry->zone_cut.name = knot_dname_copy(qname, &req->pool);
+			} else if ((qry->flags & QUERY_FORWARD) &&
+				   ((qtype == KNOT_RRTYPE_RRSIG) || (qtype == KNOT_RRTYPE_DS)) &&
+				   (knot_pkt_section(pkt, KNOT_ANSWER)->count == 0) &&
+				   (knot_pkt_section(pkt, KNOT_AUTHORITY)->count == 0)) {
+				/* In forwarding mode -
+				 * qname for initial query belongs to parked domain.
+				 * We got unsigned answer for initial query and have asked for RRSIG.
+				 * Next we got empty answer for RRSIG query.
+				 * Now try to ask for DS for next-label.
+				 * Also try to ask for DS for next-label
+				 * whenever answer for previous DS query is empty too */
+				if (qry->zone_cut.name[0] != '\0') {
+					qry->zone_cut.name = knot_dname_copy(knot_wire_next_label(qry->zone_cut.name, NULL), &req->pool);
+				} else if (qname[0] != '\0') {
+					qry->zone_cut.name = knot_dname_copy(knot_wire_next_label(qname, NULL), &req->pool);
+				}
 			}
 		} else if (knot_dname_is_sub(signer, qry->zone_cut.name)) {
 			/* Key signer is below current cut, advance and refetch keys. */
