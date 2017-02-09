@@ -531,16 +531,28 @@ static int answer_finalize(struct kr_request *request, int state)
 	/* Set AD=1 if succeeded and requested secured answer. */
 	const bool has_ad = knot_wire_get_ad(answer->wire);
 	knot_wire_clear_ad(answer->wire);
-	if (state == KR_STATE_DONE && rplan->resolved.len > 0) {
-		struct kr_query *last = array_tail(rplan->resolved);
-		/* Do not set AD for RRSIG query, as we can't validate it. */
-		const bool secure = (last->flags & QUERY_DNSSEC_WANT) &&
-		                   !(last->flags & QUERY_DNSSEC_INSECURE);
-		if (!(last->flags & QUERY_STUB) /* Never set AD if forwarding. */
-		    && has_ad && secure
-		    && knot_pkt_qtype(answer) != KNOT_RRTYPE_RRSIG) {
-			knot_wire_set_ad(answer->wire);
+	if (state != KR_STATE_DONE || rplan->resolved.len == 0 ||
+	    /* Do not set AD for RRSIG query, as we can't validate it. */
+	    knot_pkt_qtype(answer) == KNOT_RRTYPE_RRSIG) {
+		return ret;
+	}
+
+	bool secure = false;
+	for (int i = 0; i < rplan->resolved.len; ++i) {
+		struct kr_query *qry = rplan->resolved.at[i];
+		if (qry->parent != NULL) {
+			continue;
 		}
+		if ((qry->flags & QUERY_STUB) || /* Never set AD in stub mode. */
+		    !(qry->flags & QUERY_DNSSEC_WANT) ||
+		    (qry->flags & QUERY_DNSSEC_INSECURE)) {
+			return ret;
+		}
+		secure = true;
+	}
+
+	if (has_ad && secure) {
+		knot_wire_set_ad(answer->wire);
 	}
 
 	return ret;
