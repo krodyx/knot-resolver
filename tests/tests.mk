@@ -5,6 +5,10 @@ else
 $(warning cmocka not found, skipping unit tests)
 endif
 
+ifeq ($(ENABLE_DNSTAP)|$(HAS_go),yes|yes)
+include tests/dnstap/src/dnstap-test/dnstap.mk
+endif
+
 # Integration tests with Deckard
 deckard_DIR := tests/deckard
 TESTS := sets/resolver
