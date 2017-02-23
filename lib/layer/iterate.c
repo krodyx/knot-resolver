@@ -308,7 +308,7 @@ static int process_authority(knot_pkt_t *pkt, struct kr_request *req)
 	if (qry->flags & QUERY_FORWARD) {
 		for (unsigned i = 0; i < ns->count; ++i) {
 			const knot_rrset_t *rr = knot_pkt_rr(ns, i);
-			if (rr->type == KNOT_RRTYPE_SOA) {
+			if (rr->type == KNOT_RRTYPE_SOA || rr->type == KNOT_RRTYPE_NS) {
 				qry->zone_cut.name = knot_dname_copy(rr->owner, &req->pool);
 			}
 		}
@@ -586,6 +586,17 @@ static int process_answer(knot_pkt_t *pkt, struct kr_request *req)
 			if (state != kr_ok()) {
 				return state;
 			}
+		}
+		if ((query->flags & QUERY_FORWARD) &&
+		    (query->stype == KNOT_RRTYPE_DS ||
+		     query->stype == KNOT_RRTYPE_RRSIG)) {
+			/* Don't follow cname */
+			VERBOSE_MSG("<= cname for DS\\RRSIG, don't follow\n");
+			state = pick_authority(pkt, req, false);
+			if (state != kr_ok()) {
+				return KR_STATE_FAIL;
+			}
+			return state;
 		}
 		VERBOSE_MSG("<= cname chain, following\n");
 		/* Check if the same query was already resolved */

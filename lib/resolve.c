@@ -185,10 +185,10 @@ static int ns_fetch_cut(struct kr_query *qry, const knot_dname_t *requested_name
 
 	/* It can occur that here parent query already have
 	 * provably insecured zonecut which not in the cache yet. */
+	const uint32_t test_flags = QUERY_DNSSEC_INSECURE | QUERY_DNSSEC_NODS;
 	const bool is_insecured = ((qry->parent != NULL) &&
 				   (qry->parent->flags & (QUERY_AWAIT_IPV4 | QUERY_AWAIT_IPV6)) == 0 &&
-				   (qry->parent->flags & QUERY_DNSSEC_INSECURE) != 0);
-
+				   (qry->parent->flags & test_flags) != 0);
 	/* Want DNSSEC if it's possible to secure this name
 	 * (e.g. is covered by any TA) */
 	if (is_insecured) {
@@ -569,19 +569,9 @@ static int query_finalize(struct kr_request *request, struct kr_query *qry, knot
 			ret = edns_create(pkt, request->answer, request);
 		}
 		if (ret == 0) {
-			/* Stub resolution (ask for +rd and +do) */
-			if (qry->flags & QUERY_STUB) {
-				knot_wire_set_rd(pkt->wire);
-				if (knot_pkt_has_dnssec(request->answer))
-					knot_edns_set_do(pkt->opt_rr);
-			/* Full resolution (ask for +cd and +do) */
-			} else if (qry->flags & QUERY_DNSSEC_WANT) {
-				if (qry->flags & QUERY_FORWARD) {
-					knot_wire_set_rd(pkt->wire);
-				}
-				knot_edns_set_do(pkt->opt_rr);
-				knot_wire_set_cd(pkt->wire);
-			}
+			knot_wire_set_rd(pkt->wire);
+			knot_edns_set_do(pkt->opt_rr);
+			knot_wire_set_cd(pkt->wire);
 			ret = edns_put(pkt);
 		}
 	}
